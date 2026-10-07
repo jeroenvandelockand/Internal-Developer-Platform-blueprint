@@ -1,0 +1,118 @@
+apiVersion: kro.run/v1alpha1
+kind: ResourceGraphDefinition
+metadata:
+  name: webapplication
+spec:
+  schema:
+    apiVersion: v1alpha1
+    kind: WebApplication
+
+    spec:
+      name: string
+      image: string | default="nginx:latest"
+      replicas: integer | default=2
+      configData: map[string]string | default={}
+      secretData: map[string]string | default={}
+      owner: string | default="guest"
+      description: string | default="Managed web application"
+
+    status:
+      availableReplicas: ${deployment.status.availableReplicas}
+
+  resources:
+
+    - id: config
+      template:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: ${schema.spec.name}-config
+          annotations:
+            argocd.argoproj.io/tracking-id: ${schema.metadata.?annotations["argocd.argoproj.io/tracking-id"]}
+        data: ${schema.spec.configData}
+
+    - id: secret
+      template:
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: ${schema.spec.name}-secret
+          annotations:
+            argocd.argoproj.io/tracking-id: ${schema.metadata.?annotations["argocd.argoproj.io/tracking-id"]}
+        type: Opaque          
+        stringData: ${schema.spec.secretData}
+
+    - id: backstage-component
+      template:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: ${schema.spec.name}-backstage-catalog
+          labels:
+            backstage.io/discovery: "true" # Label waaraan de Backstage plugin deze herkent
+          annotations:
+            argocd.argoproj.io/tracking-id: ${schema.metadata.?annotations["argocd.argoproj.io/tracking-id"]}
+        data:
+          catalog-info.yaml: |
+            apiVersion: backstage.io/v1alpha1
+            kind: Component
+            metadata:
+              name: ${schema.spec.name}
+              description: ${schema.spec.description}
+              annotations:
+                # Koppeling naar de live Kubernetes status in het Backstage dashboard
+                backstage.io/kubernetes-id: ${schema.spec.name}
+                argocd/app-name: ${schema.spec.name}
+            spec:
+              type: service
+              lifecycle: experimental
+              owner: ${schema.spec.owner}        
+
+    - id: deployment
+      template:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: ${schema.spec.name}
+          annotations:
+            argocd.argoproj.io/tracking-id: ${schema.metadata.?annotations["argocd.argoproj.io/tracking-id"]}
+        spec:
+          replicas: ${schema.spec.replicas}
+
+          selector:
+            matchLabels:
+              app: ${schema.spec.name}
+
+          template:
+            metadata:
+              labels:
+                app: ${schema.spec.name}
+                backstage.io/kubernetes-id: ${schema.spec.name}
+              annotations:
+                config-version: ${config.metadata.resourceVersion}
+                secret-version: ${secret.metadata.resourceVersion}                
+
+            spec:
+              containers:
+                - name: app
+                  image: ${schema.spec.image}
+                  ports:
+                    - containerPort: 80
+                  envFrom:
+                    - configMapRef:
+                        name: ${config.metadata.name}
+                    - secretRef:
+                        name: ${secret.metadata.name}                        
+
+    - id: service
+      template:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: ${schema.spec.name}
+        spec:
+          selector:
+            app: ${schema.spec.name}
+          ports:
+            - port: 80
+              targetPort: 80

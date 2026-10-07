@@ -2,13 +2,10 @@ apiVersion: kro.run/v1alpha1
 kind: WebApplication
 metadata:
   name: webshop
-  namespace: webshop
 spec:
   name: webshop
   image: nginx:1.27
   replicas: 2
-  owner: "frontend-team"
-  description: "De frontend webshop applicatie" 
   configData:
     DB_HOST: "postgres-svc"
     DB_USER: "webshop"

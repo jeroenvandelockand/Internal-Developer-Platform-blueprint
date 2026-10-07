@@ -13,8 +13,6 @@ spec:
       replicas: integer | default=2
       configData: map[string]string | default={}
       secretData: map[string]string | default={}
-      owner: string | default="guest"
-      description: string | default="Managed web application"
 
     status:
       availableReplicas: ${deployment.status.availableReplicas}
@@ -29,7 +27,7 @@ spec:
           name: ${schema.spec.name}-config
           annotations:
             argocd.argoproj.io/tracking-id: ${schema.metadata.?annotations["argocd.argoproj.io/tracking-id"]}
-        data: ${schema.spec.configData}
+        data: ${schema.spec.configData}  
 
     - id: secret
       template:
@@ -41,32 +39,6 @@ spec:
             argocd.argoproj.io/tracking-id: ${schema.metadata.?annotations["argocd.argoproj.io/tracking-id"]}
         type: Opaque          
         stringData: ${schema.spec.secretData}
-
-    - id: backstage-component
-      template:
-        apiVersion: v1
-        kind: ConfigMap
-        metadata:
-          name: ${schema.spec.name}-backstage-catalog
-          labels:
-            backstage.io/discovery: "true" # Label waaraan de Backstage plugin deze herkent
-          annotations:
-            argocd.argoproj.io/tracking-id: ${schema.metadata.?annotations["argocd.argoproj.io/tracking-id"]}
-        data:
-          catalog-info.yaml: |
-            apiVersion: backstage.io/v1alpha1
-            kind: Component
-            metadata:
-              name: ${schema.spec.name}
-              description: ${schema.spec.description}
-              annotations:
-                # Koppeling naar de live Kubernetes status in het Backstage dashboard
-                backstage.io/kubernetes-id: ${schema.spec.name}
-                argocd/app-name: ${schema.spec.name}
-            spec:
-              type: service
-              lifecycle: experimental
-              owner: ${schema.spec.owner}        
 
     - id: deployment
       template:
